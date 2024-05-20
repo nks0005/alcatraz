@@ -527,8 +527,8 @@ static int hb_start(u64 reinitialize)
 	int cpu_id;
 	int i;
 
-	cpu_count = num_online_cpus();
-	cpu_id = smp_processor_id();
+	cpu_count = num_online_cpus(); // 사용 가능한 논리적인 코어의 수를 반환
+	cpu_id = smp_processor_id(); // 지금 논리 프로세서 id
 	g_thread_result = 0;
 	g_need_init_in_secure.counter = 1;
 	g_allow_hyper_box_hide = 0;
@@ -552,7 +552,7 @@ static int hb_start(u64 reinitialize)
 			hb_vm_thread, (void*) reinitialize, cpu_to_node(i), "vm_thread");
 		if (g_vm_start_thread_id[i] != NULL)
 		{
-			kthread_bind(g_vm_start_thread_id[i], i);
+			kthread_bind(g_vm_start_thread_id[i], i); // 특정 논리 cpu 코어에 쓰레드 바인딩
 		}
 		else
 		{
@@ -596,6 +596,7 @@ static int hb_start(u64 reinitialize)
 	hb_printf(LOG_LEVEL_DEBUG, LOG_INFO "VM [%d] Thread Run Success\n", cpu_id);
 
 	hb_printf(LOG_LEVEL_DEBUG, LOG_INFO "Waiting for complete\n", i);
+	// --- 쓰레드 할당 및 쓰레드 wake up.
 
 	/* Check complete flags */
 	while(atomic_read(&g_complete_flags) > 0)
@@ -2327,6 +2328,7 @@ static void hb_disable_and_change_machine_check_timer(int reinitialize)
 /*
  * Enable VT-x and run Hyper-box.
  * This thread function runs on each core.
+ * 각 논리 코어별로 쓰레드 구현되어 있음
  */
 static int hb_vm_thread(void* argument)
 {
