@@ -63,7 +63,7 @@ static void hbh_wait_hyper_box_module(void)
 	struct module *mod;
 	struct list_head *pos, *node;
 	int found = 0;
-
+	hbh_printf(LOG_LEVEL_DEBUG, LOG_INFO "Started \n");
 	while (found == 0)
 	{
 		mod = THIS_MODULE;
@@ -108,8 +108,10 @@ static int hbh_log_thread(void* argument)
 	struct kfifo* fifo;
 
 	/* Find the hyper-box module.*/
+	hbh_printf(LOG_LEVEL_DEBUG, LOG_INFO "Find the hyper-box module \n");
 	hbh_wait_hyper_box_module();
 
+	hbh_printf(LOG_LEVEL_DEBUG, LOG_INFO "hbh_vm_call(VM_SERVICE_GET_LOGINFO, NULL) \n");
 	fifo = (struct kfifo*) hbh_vm_call(VM_SERVICE_GET_LOGINFO, NULL);
 	if (fifo == NULL)
 	{
@@ -167,7 +169,10 @@ static int hbh_log_thread(void* argument)
  */
 static int __init hyper_box_helper_init(void)
 {
+	hbh_printf(LOG_LEVEL_DEBUG, LOG_INFO "init started \n");
+	hbh_printf(LOG_LEVEL_DEBUG, LOG_INFO "thread init \n");
 	g_log_thread_id = kthread_run(hbh_log_thread, NULL, "logger");
+	
 	if (g_log_thread_id == NULL)
 	{
 		hbh_error_log(ERROR_LOGGING_FAIL);
