@@ -60,6 +60,8 @@
 #include <linux/vmalloc.h>
 #endif
 
+static DEFINE_MUTEX(module_mutex);
+
 /*
  * Variables.
  */
