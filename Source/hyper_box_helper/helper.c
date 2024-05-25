@@ -41,12 +41,12 @@ void hbh_printf(int level, char* format, ...)
 {
 	va_list arg_list;
 
-	if (level <= LOG_LEVEL)
-	{
+	//if (level <= LOG_LEVEL)
+	//{
 		va_start(arg_list, format);
 		vprintk(format, arg_list);
 		va_end(arg_list);
-	}
+	//}
 }
 
 /*
