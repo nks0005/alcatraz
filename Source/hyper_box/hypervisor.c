@@ -11,6 +11,7 @@
  * This software has GPL v2+ license. See the GPL_LICENSE file.
  */
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/syscalls.h>
