@@ -1667,8 +1667,8 @@ void hb_printf(int level, char* format, ...)
 
 	int cpu_id;
 	cpu_id = smp_processor_id();
-	if (level <= LOG_LEVEL)
-	{
+	//if (level <= LOG_LEVEL)
+	//{
 		/* Normal mode or vmx non-root mode. */
 		if (g_vmx_root_mode[cpu_id] == 0)
 		{
@@ -1687,7 +1687,7 @@ void hb_printf(int level, char* format, ...)
 
 			spin_unlock(&g_log_lock);
 		}
-	}
+	//}
 }
 
 /*
@@ -4722,90 +4722,88 @@ void hb_int_nmi_callback(void)
  */
 static void hb_setup_vm_host_register(struct hb_vm_host_register* hb_vm_host_register)
 {
-	try {
-	struct desc_ptr gdtr;
-	struct desc_ptr idtr;
-	struct desc_struct* gdt;
-	LDTTSS_DESC* tss;
-	u64 base0 = 0;
-	u64 base1 = 0;
-	u64 base2 = 0;
-	u64 base3 = 0;
-	int i;
-	char* vm_exit_stack;
-	u64 stack_size = g_stack_size;
-	int cpu_id;
 
-	cpu_id = smp_processor_id();
+		struct desc_ptr gdtr;
+		struct desc_ptr idtr;
+		struct desc_struct* gdt;
+		LDTTSS_DESC* tss;
+		u64 base0 = 0;
+		u64 base1 = 0;
+		u64 base2 = 0;
+		u64 base3 = 0;
+		int i;
+		char* vm_exit_stack;
+		u64 stack_size = g_stack_size;
+		int cpu_id;
 
-	/* Allocate kernel stack for VM exit */
-	vm_exit_stack = (char*)(g_vm_exit_stack_addr[cpu_id]);
-	memset(vm_exit_stack, 0, stack_size);
+		cpu_id = smp_processor_id();
 
-	native_store_gdt(&gdtr);
-	store_idt(&idtr);
+		/* Allocate kernel stack for VM exit */
+		vm_exit_stack = (char*)(g_vm_exit_stack_addr[cpu_id]);
+		memset(vm_exit_stack, 0, stack_size);
 
-	hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "VM [%d] Setup Host Register\n", cpu_id);
-	hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] GDTR Address %016lX\n",
-		gdtr.address);
-	hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] GDTR Size %d\n", gdtr.size);
+		native_store_gdt(&gdtr);
+		store_idt(&idtr);
 
-	hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] IDTR Address %016lX\n",
-		idtr.address);
-	hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] IDTR Size %d\n", idtr.size);
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "VM [%d] Setup Host Register\n", cpu_id);
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] GDTR Address %016lX\n",
+			gdtr.address);
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] GDTR Size %d\n", gdtr.size);
 
-	for (i = 0 ; i < (gdtr.size + 7) / 8 ; i++)
-	{
-		gdt = (struct desc_struct*)(gdtr.address + i * 8);
-		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] GDT Index %d\n", i);
-		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] GDT High %08X, Low %08X\n",
-			*((u32*)gdt + 1), *((u32*)gdt));
-	}
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] IDTR Address %016lX\n",
+			idtr.address);
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] IDTR Size %d\n", idtr.size);
 
-	hb_vm_host_register->cr0 = hb_get_cr0();
+		for (i = 0 ; i < (gdtr.size + 7) / 8 ; i++)
+		{
+			gdt = (struct desc_struct*)(gdtr.address + i * 8);
+			hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] GDT Index %d\n", i);
+			hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] GDT High %08X, Low %08X\n",
+				*((u32*)gdt + 1), *((u32*)gdt));
+		}
 
-	/* Using Shaodow CR3 for world separation in host*/
-	hb_vm_host_register->cr3 = g_vm_host_phy_pml4;
-	hb_vm_host_register->cr4 = hb_get_cr4();
+		hb_vm_host_register->cr0 = hb_get_cr0();
 
-	hb_vm_host_register->rsp = (u64)vm_exit_stack + stack_size - VAL_4KB;
-	hb_vm_host_register->rip = (u64)hb_vm_exit_callback_stub;
+		/* Using Shaodow CR3 for world separation in host*/
+		hb_vm_host_register->cr3 = g_vm_host_phy_pml4;
+		hb_vm_host_register->cr4 = hb_get_cr4();
 
-	hb_vm_host_register->cs_selector = __KERNEL_CS;
-	hb_vm_host_register->ss_selector = __KERNEL_DS;
-	hb_vm_host_register->ds_selector = __KERNEL_DS;
-	hb_vm_host_register->es_selector = __KERNEL_DS;
-	hb_vm_host_register->fs_selector = __KERNEL_DS;
-	hb_vm_host_register->gs_selector = __KERNEL_DS;
-	hb_vm_host_register->tr_selector = hb_get_tr();
+		hb_vm_host_register->rsp = (u64)vm_exit_stack + stack_size - VAL_4KB;
+		hb_vm_host_register->rip = (u64)hb_vm_exit_callback_stub;
 
-	hb_vm_host_register->fs_base_addr = hb_rdmsr(MSR_FS_BASE_ADDR);
-	hb_vm_host_register->gs_base_addr = hb_rdmsr(MSR_GS_BASE_ADDR);
+		hb_vm_host_register->cs_selector = __KERNEL_CS;
+		hb_vm_host_register->ss_selector = __KERNEL_DS;
+		hb_vm_host_register->ds_selector = __KERNEL_DS;
+		hb_vm_host_register->es_selector = __KERNEL_DS;
+		hb_vm_host_register->fs_selector = __KERNEL_DS;
+		hb_vm_host_register->gs_selector = __KERNEL_DS;
+		hb_vm_host_register->tr_selector = hb_get_tr();
 
-	tss = (LDTTSS_DESC*)(gdtr.address +
-		(hb_vm_host_register->tr_selector & ~MASK_GDT_ACCESS));
-	base0 = tss->base0;
-	base1 = tss->base1;
-	base2 = tss->base2;
-	base3 = tss->base3;
-	hb_vm_host_register->tr_base_addr = base0 | (base1 << 16) | (base2 << 24) |
-		(base3 << 32);
+		hb_vm_host_register->fs_base_addr = hb_rdmsr(MSR_FS_BASE_ADDR);
+		hb_vm_host_register->gs_base_addr = hb_rdmsr(MSR_GS_BASE_ADDR);
 
-	hb_vm_host_register->gdtr_base_addr = gdtr.address;
-	hb_vm_host_register->idtr_base_addr = g_host_idtr.address;
+		tss = (LDTTSS_DESC*)(gdtr.address +
+			(hb_vm_host_register->tr_selector & ~MASK_GDT_ACCESS));
+		base0 = tss->base0;
+		base1 = tss->base1;
+		base2 = tss->base2;
+		base3 = tss->base3;
+		hb_vm_host_register->tr_base_addr = base0 | (base1 << 16) | (base2 << 24) |
+			(base3 << 32);
 
-	hb_vm_host_register->ia32_sys_enter_cs = hb_rdmsr(MSR_IA32_SYSENTER_CS);
-	hb_vm_host_register->ia32_sys_enter_esp = hb_rdmsr(MSR_IA32_SYSENTER_ESP);
-	hb_vm_host_register->ia32_sys_enter_eip = hb_rdmsr(MSR_IA32_SYSENTER_EIP);
+		hb_vm_host_register->gdtr_base_addr = gdtr.address;
+		hb_vm_host_register->idtr_base_addr = g_host_idtr.address;
 
-	hb_vm_host_register->ia32_perf_global_ctrl = hb_rdmsr(MSR_IA32_PERF_GLOBAL_CTRL);
-	hb_vm_host_register->ia32_pat = hb_rdmsr(MSR_IA32_PAT);
-	hb_vm_host_register->ia32_efer = hb_rdmsr(MSR_IA32_EFER);
+		hb_vm_host_register->ia32_sys_enter_cs = hb_rdmsr(MSR_IA32_SYSENTER_CS);
+		hb_vm_host_register->ia32_sys_enter_esp = hb_rdmsr(MSR_IA32_SYSENTER_ESP);
+		hb_vm_host_register->ia32_sys_enter_eip = hb_rdmsr(MSR_IA32_SYSENTER_EIP);
 
-	hb_dump_vm_host_register(hb_vm_host_register);
-	} catch (...) {
-		hb_printf(LOG_LEVEL_ERROR, LOG_ERR "An exception occurred in hb_setup_vm_host_register\n");
-	}
+		hb_vm_host_register->ia32_perf_global_ctrl = hb_rdmsr(MSR_IA32_PERF_GLOBAL_CTRL);
+		hb_vm_host_register->ia32_pat = hb_rdmsr(MSR_IA32_PAT);
+		hb_vm_host_register->ia32_efer = hb_rdmsr(MSR_IA32_EFER);
+
+		hb_dump_vm_host_register(hb_vm_host_register);
+	
 }
 
 /*
