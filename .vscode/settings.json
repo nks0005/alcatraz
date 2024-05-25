@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "*.txt": "ansible",
+        "workaround.h": "c"
+    }
+}
