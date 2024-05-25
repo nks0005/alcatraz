@@ -4722,6 +4722,7 @@ void hb_int_nmi_callback(void)
  */
 static void hb_setup_vm_host_register(struct hb_vm_host_register* hb_vm_host_register)
 {
+	try {
 	struct desc_ptr gdtr;
 	struct desc_ptr idtr;
 	struct desc_struct* gdt;
@@ -4802,6 +4803,9 @@ static void hb_setup_vm_host_register(struct hb_vm_host_register* hb_vm_host_reg
 	hb_vm_host_register->ia32_efer = hb_rdmsr(MSR_IA32_EFER);
 
 	hb_dump_vm_host_register(hb_vm_host_register);
+	} catch (...) {
+		hb_printf(LOG_LEVEL_ERROR, LOG_ERR "An exception occurred in hb_setup_vm_host_register\n");
+	}
 }
 
 /*
