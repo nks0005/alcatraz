@@ -4803,7 +4803,7 @@ static void hb_setup_vm_host_register(struct hb_vm_host_register* hb_vm_host_reg
 		hb_vm_host_register->ia32_sys_enter_eip = hb_rdmsr(MSR_IA32_SYSENTER_EIP);
 
 		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [T] LOG MSR_IA32_PERF_GLOBAL_CTRL");
-		hb_vm_host_register->ia32_perf_global_ctrl = hb_rdmsr(MSR_IA32_PERF_GLOBAL_CTRL);
+		// hb_vm_host_register->ia32_perf_global_ctrl = hb_rdmsr(MSR_IA32_PERF_GLOBAL_CTRL);
 		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [T] LOG MSR_IA32_PAT");
 		hb_vm_host_register->ia32_pat = hb_rdmsr(MSR_IA32_PAT);
 		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [T] MSR_IA32_EFER");
