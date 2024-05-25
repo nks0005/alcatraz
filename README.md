@@ -76,7 +76,7 @@ Alcatraz consists of Hyper-box and a tailored Linux kernel. To make the tailored
 # 5.8.0-44-generic is recommended, but higher versions are also fine.
 $> sudo apt-get install linux-image-5.8.0-44-generic
 $> sudo apt-get install linux-modules-extra-5.8.0-44-generic
-$> sudo apt-get build-dep linux-image-unsigned-5.8.0-44-generic 
+$> sudo apt-get build-dep linux-image-unsigned-5.8.0-44-generic
 $> sudo apt-get install linux-headers-5.8.0-44-generic ncurses-dev
 $> apt-get source linux-image-unsigned-5.8.0-44-generic
 
@@ -345,3 +345,12 @@ Hyper-box of Alcatraz protects kernel code, read-only data, system table, privil
    * Some machines may modify protected areas while hibernating and suspending.
  * Module unloading
    * Hyper-box protects the module's code and read-only data. So, if you unload modules, it may cause problems. Please don't unload modules or set HYPERBOX\_USE\_MODULE\_PROTECTION to 0 of hyper\_box.h file if you really want to do it.
+
+
+
+
+
+# = Error =
+
+VMWARE Setting
+	monitor_control.pseudo_perfctr = "TRUE"
