@@ -4778,9 +4778,10 @@ static void hb_setup_vm_host_register(struct hb_vm_host_register* hb_vm_host_reg
 		hb_vm_host_register->fs_selector = __KERNEL_DS;
 		hb_vm_host_register->gs_selector = __KERNEL_DS;
 		hb_vm_host_register->tr_selector = hb_get_tr();
-
-		hb_vm_host_register->fs_base_addr = hb_rdmsr(MSR_FS_BASE_ADDR);
-		hb_vm_host_register->gs_base_addr = hb_rdmsr(MSR_GS_BASE_ADDR);
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [T] LOG MSR_FS_BASE_ADDR");
+		hb_vm_host_register->fs_base_addr = hb_rdmsr(MSR_FS_BASE_ADDR); // #define MSR_FS_BASE_ADDR						0xC0000100
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [T] LOG MSR_GS_BASE_ADDR");
+		hb_vm_host_register->gs_base_addr = hb_rdmsr(MSR_GS_BASE_ADDR); // #define MSR_GS_BASE_ADDR						0xC0000101
 
 		tss = (LDTTSS_DESC*)(gdtr.address +
 			(hb_vm_host_register->tr_selector & ~MASK_GDT_ACCESS));
@@ -4794,12 +4795,18 @@ static void hb_setup_vm_host_register(struct hb_vm_host_register* hb_vm_host_reg
 		hb_vm_host_register->gdtr_base_addr = gdtr.address;
 		hb_vm_host_register->idtr_base_addr = g_host_idtr.address;
 
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [T] LOG MSR_IA32_SYSENTER_CS");
 		hb_vm_host_register->ia32_sys_enter_cs = hb_rdmsr(MSR_IA32_SYSENTER_CS);
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [T] LOG MSR_IA32_SYSENTER_ESP");
 		hb_vm_host_register->ia32_sys_enter_esp = hb_rdmsr(MSR_IA32_SYSENTER_ESP);
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [T] LOG MSR_IA32_SYSENTER_EIP");	
 		hb_vm_host_register->ia32_sys_enter_eip = hb_rdmsr(MSR_IA32_SYSENTER_EIP);
 
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [T] LOG MSR_IA32_PERF_GLOBAL_CTRL");
 		hb_vm_host_register->ia32_perf_global_ctrl = hb_rdmsr(MSR_IA32_PERF_GLOBAL_CTRL);
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [T] LOG MSR_IA32_PAT");
 		hb_vm_host_register->ia32_pat = hb_rdmsr(MSR_IA32_PAT);
+		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [T] MSR_IA32_EFER");
 		hb_vm_host_register->ia32_efer = hb_rdmsr(MSR_IA32_EFER);
 
 		hb_dump_vm_host_register(hb_vm_host_register);
