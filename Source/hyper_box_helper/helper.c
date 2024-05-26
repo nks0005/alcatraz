@@ -112,7 +112,7 @@ static int hbh_log_thread(void* argument)
 	hbh_wait_hyper_box_module();
 
 	hbh_printf(LOG_LEVEL_DEBUG, LOG_INFO "hbh_vm_call(VM_SERVICE_GET_LOGINFO, NULL) \n");
-	fifo = (struct kfifo*) hbh_vm_call(VM_SERVICE_GET_LOGINFO, NULL);
+	fifo = (struct kfifo*) hbh_vm_call(VM_SERVICE_GET_LOGINFO, NULL); // vmcall (0)
 	if (fifo == NULL)
 	{
 		hbh_error_log(ERROR_LOGGING_FAIL);
