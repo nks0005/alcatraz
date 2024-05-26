@@ -350,7 +350,32 @@ Hyper-box of Alcatraz protects kernel code, read-only data, system table, privil
 
 
 
-# = Error =
+# = trouble shooting =
 
 VMWARE Setting
 	monitor_control.pseudo_perfctr = "TRUE"
+
+
+
+# Hyper_box
+
+hyper_box_init()
+	hb_print_hyper_box_logo() - 로고 출력
+	cpuid_count(1, 0, ...) - cpu id 정보를 얻어옴	
+		VMX, SMX 체크
+			Virtual Machine Extensions
+			Safer Mode Extensions : 신뢰할 수 있는 컴퓨팅 기반을 제공
+	msr = hb_rdmsr(MSR_iA32_FEAT_CTL)...
+		VMX가 BIOS으로 인해 락 걸려있는지 확인
+	hb_rdmsr(MSR_IA32_VMX_PROCBASED_CTLS2) >> 32 & VM_BIT_VM_SEC_PROC_CTRL_VMCS_SHADOWING
+		VMCS Shadowing : 하이퍼바이저가 게스트 가상 머신의 VMCS를 캐시, VMCS 갱신 시에 메모리 액세스를 최소화하여 성능을 향상
+	hb_rdmsr(MSR_IA32_VMX_PROCBASED_CTLS2) >> 32 & VM_BIT_VM_SEC_PROC_CTRL_ENABLE_VPID
+		VPID : TLB 관리에 각 가상 머신의 메모리 매핑을 할 수 있게 함 -> TLB 스위치 오버헤드 감소
+	hb_get_function_pointers() - 모듈에 필요한 함수들 초기화
+	cpuid_count(0x0D, 1, &eax, &ebx, &ecx, &edx);
+		XSAVES, XRSTORS : 고급 벡터 확장 기능, 부동 소수점 및 벡터 상태 레지스터 -> 프로세서 상태의 저장 및 복원을 효율적으로 가능하게 도와줌 - 프로세서의 성능 최적화
+	register_pm_notifier(g_hb_sleep_nb_ptr);
+		sleep 여부 감지
+			hb_start(1);
+
+	
