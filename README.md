@@ -377,5 +377,52 @@ hyper_box_init()
 	register_pm_notifier(g_hb_sleep_nb_ptr);
 		sleep 여부 감지
 			hb_start(1);
+	hb_alloc_vmcs_memory()
+		for(cpu 활성화된 수)
+			페이지 할당
+	USE_EPT
+	hb_alloc_ept_pages()
+	hb_protect_vmcs()
+	hb_prepare_monitor()
+	hb_setup_workaround()
+		"__netif_hash_nolisten", "__ip_select_ident",
+		"secure_dccpv6_sequence_number", "secure_ipv4_port_ephemeral",
+		"netif_receive_skb_internal", "__netif_receive_skb_core",
+		"netif_rx_internal", "inet6_ehashfn.isra.6", "inet_ehashfn"
+		getProcAddr
+	hb_setup_memory_pool()
+		g_memory_pool
+	hb_prepare_log_buffer()
+	hb_get_symbol_address("tasklist_lock")
+		Lock
+	hb_start()
 
-	
+# hb_start
+	num_online_cpus()
+	smp_processor_id()
+	init()
+		atomic_set(&g_thread_run_flags, cpu_count);
+		atomic_set(&g_thread_entry_count, cpu_count);
+		atomic_set(&g_thread_rcu_sync_count, cpu_count);
+		atomic_set(&g_sync_flags, cpu_count);
+		atomic_set(&g_complete_flags, cpu_count);
+		atomic_set(&g_framework_init_start_flags, cpu_count);
+		atomic_set(&g_first, 1);
+		atomic_set(&g_enter_count, 0);
+		atomic_set(&g_iommu_complete_flags, 0);
+		atomic_set(&(g_mutex_lock_flags), 0);
+	for CPU 마다 thread
+		hb_vm_thread()
+	while(atomic_read(&g_complete_flags) > 0) sleep(100);
+		thread 가 전부 complete 하면 종료
+
+# hb_vm_thread (0) START_MODE_INITIALIZE
+	cpu_id = smp_processor_id()
+	hb_disable_and_change_machine_check_timer(0)
+		MCE - 블루스크린?
+		/* Disable MCE event. */
+		cr4_clear_bits(CR4_BIT_MCE);
+		disable_irq(VM_INT_MACHINE_CHECK);
+
+	g_watchdog_nmi_disable_fp(cpu_id)
+		watchdog - 일정 주기마다 타이머 = 주기적으로 리셋하여 시스템이 정상 작동 중임을 알려줌
