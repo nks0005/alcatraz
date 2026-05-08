@@ -74,3 +74,18 @@ SMM 실행되는 조건
 
 6) RSM으로 복귀
 - `RSM`으로 원래 실행 흐름(하이퍼바이저/커널/유저)로 돌아감
+
+
+
+
+
+
+
+# hyper-box + tailored kernel 구조
+- SMM 장악 후 하이퍼바이저 모니터링 -> BIOS/UEFI 펌웨어 수정이 필요
+--> 펌웨어 수정 없이도 적용 가능한 방법
+
+>> KVM 권한 탈취
+
+Tailored kernel 
+> 공격 표면(attack surface)을 줄이기 위해

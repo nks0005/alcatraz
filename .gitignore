@@ -10,3 +10,4 @@
 .tmp_versions/
 .deps/
 .depend/
+*.json

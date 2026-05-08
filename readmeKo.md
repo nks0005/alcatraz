@@ -47,11 +47,36 @@ Alcatraz는 KVM/QEMU 및 KVM 기반 MicroVM에서의 “탈출(escape)”을 방
 Alcatraz는 GPL v2+ 라이선스를 따릅니다.
 
 # 2. Alcatraz 소개(Introduction)
-DevOps 및 서버리스 아키텍처가 부상하면서, 클라우드 벤더들은 전통적인 가상 머신(VM) 서비스뿐 아니라 컨테이너 서비스도 지원해왔습니다. 전통적인 VM은 가상 머신 모니터(VMM, 즉 하이퍼바이저)가 가상화된 하드웨어로 호스트 머신과 분리해주기 때문에 강한 격리를 제공합니다. 반면 컨테이너는 네임스페이스(namespace), cgroup 같은 커널 수준의 격리 기법을 사용합니다. 이 덕분에 컨테이너는 VM보다 빠르지만, 호스트 커널을 공유하므로 공격자가 커널 취약점을 이용해 컨테이너 밖으로 탈출할 수 있습니다.
+DevOps 및 서버리스 아키텍처가 부상하면서, 클라우드 벤더들은 전통적인 가상 머신(VM) 서비스뿐 아니라 컨테이너 서비스도 지원해왔습니다. 
+전통적인 VM은 가상 머신 모니터(VMM, 즉 하이퍼바이저)가 가상화된 하드웨어로 호스트 머신과 분리해주기 때문에 강한 격리를 제공합니다. 
+반면 컨테이너는 네임스페이스(namespace), cgroup 같은 커널 수준의 격리 기법을 사용합니다. 
+이 덕분에 컨테이너는 VM보다 빠르지만, 호스트 커널을 공유하므로 공격자가 커널 취약점을 이용해 컨테이너 밖으로 탈출할 수 있습니다.
 
-최근의 컨테이너들은 이 문제를 해결하기 위해 하이퍼바이저 기술을 활용합니다. Kata container는 KVM/QEMU로 컨테이너를 격리하고, Amazon의 Firecracker는 KVM 기반 경량 하이퍼바이저를 사용하는 microVM을 만들며, Google의 gVisor도 사용자 공간 커널과 경량 하이퍼바이저를 조합합니다. 이런 아키텍처들은 강한 격리를 제공하지만, 여전히 개선 여지가 있습니다. KVM은 하이퍼바이저 권한(Ring -1)에서 동작하기 때문에, 공격자는 KVM 취약점을 통해 직접 탈출할 수 있습니다. 많은 연구자들이 시스템 관리 모드(SMM, Ring -2)를 장악해 하이퍼바이저를 모니터링하는 접근을 시도했지만, BIOS/UEFI 펌웨어 수정이 필요했습니다.
+최근의 컨테이너들은 이 문제를 해결하기 위해 하이퍼바이저 기술을 활용합니다. 
+Kata container는 KVM/QEMU로 컨테이너를 격리하고, 
+Amazon의 Firecracker는 KVM 기반 경량 하이퍼바이저를 사용하는 microVM을 만들며, 
+Google의 gVisor도 사용자 공간 커널과 경량 하이퍼바이저를 조합합니다. 
 
-이런 배경에서 저는 KVM/QEMU 및 KVM 기반 microVM의 탈출을 방지하기 위한 새로운 실용적 하이퍼바이저 샌드박스인 Alcatraz를 만들었습니다. Alcatraz는 Hyper-box와 Tailored kernel로 구성됩니다. Hyper-box는 KVM을 격리하기 위해 처음부터 만든 pico-hypervisor입니다. 다른 방식들과 달리, Hyper-box가 호스트 하이퍼바이저(Ring -1)가 되고 KVM의 권한을 게스트 하이퍼바이저(Ring 0)로 “강등”합니다. Hyper-box는 KVM을 샌드박싱하기 위한 중첩 하이퍼바이저(nested hypervisor) 기능을 가지며, SMM이나 펌웨어 수정이 필요하지 않습니다. 또한 모든 시스템 콜을 모니터링하여 탈출과 비인가 권한 상승을 방지합니다. Tailored Linux kernel은 기존 커널을 재컴파일한 버전으로, 공격 표면을 줄이기 위해 레거시 시스템 콜 인터페이스를 제거했고, Hyper-box가 코드 및 읽기 전용(RO) 데이터를 보호하기 때문에 런타임 코드 수정 기능도 제거했습니다. Alcatraz는 노트북, 데스크톱, 서버 등에서 VM과 microVM 안에 있는 신뢰할 수 없는 코드를 실행할 때 사용할 수 있습니다.
+이런 아키텍처들은 강한 격리를 제공하지만, 여전히 개선 여지가 있습니다. 
+KVM은 하이퍼바이저 권한(Ring -1)에서 동작하기 때문에, 공격자는 KVM 취약점을 통해 직접 탈출할 수 있습니다. 
+많은 연구자들이 시스템 관리 모드(SMM, Ring -2)를 장악해 하이퍼바이저를 모니터링하는 접근을 시도했지만, BIOS/UEFI 펌웨어 수정이 필요했습니다.
+
+이런 배경에서 저는 KVM/QEMU 및 KVM 기반 microVM의 탈출을 방지하기 위한 새로운 실용적 하이퍼바이저 샌드박스인 Alcatraz를 만들었습니다. 
+Alcatraz는 Hyper-box와 Tailored kernel로 구성됩니다. 
+
+Hyper-box는 KVM을 격리하기 위해 처음부터 만든 pico-hypervisor입니다. 
+다른 방식들과 달리, 
+Hyper-box가 호스트 하이퍼바이저(Ring -1)가 되고 
+KVM의 권한을 게스트 하이퍼바이저(Ring 0)로 “강등”합니다. 
+
+Hyper-box는 KVM을 샌드박싱하기 위한 중첩 하이퍼바이저(nested hypervisor) 기능을 가지며, 
+SMM이나 펌웨어 수정이 필요하지 않습니다. 
+
+또한 모든 시스템 콜을 모니터링하여 탈출과 비인가 권한 상승을 방지합니다. 
+
+Tailored Linux kernel은 기존 커널을 재컴파일한 버전으로, 공격 표면을 줄이기 위해 레거시 시스템 콜 인터페이스를 제거했고, Hyper-box가 코드 및 읽기 전용(RO) 데이터를 보호하기 때문에 런타임 코드 수정 기능도 제거했습니다. 
+
+Alcatraz는 노트북, 데스크톱, 서버 등에서 VM과 microVM 안에 있는 신뢰할 수 없는 코드를 실행할 때 사용할 수 있습니다.
 
 ## 2.1. Alcatraz 아키텍처(Architecture)
 Alcatraz의 아키텍처를 설명합니다. 다른 연구들처럼 “더 높은 권한을 가져가는” 방식이 아니라, pico-hypervisor인 Hyper-box로 샌드박스를 만들고 KVM의 권한을 아래 그림처럼 게스트 하이퍼바이저로 강등하는 구조를 택했습니다.
@@ -60,9 +85,18 @@ Alcatraz의 아키텍처를 설명합니다. 다른 연구들처럼 “더 높�
 <img src="document/images/architecture.png" width="900">
 </p>
 
-Hyper-box는 탈출을 방지하기 위한 핵심 메커니즘을 가지고 있습니다. 첫째, Intel VT(Virtualization Technology)의 메모리/레지스터 보호 기법을 사용합니다. EPT(Extended Page Table)와 제어 레지스터(CR) 모니터링 기능을 활용해 비인가 코드 및 읽기 전용 데이터 영역을 보호합니다. 둘째, 하드웨어 브레이크포인트를 이용해 모든 시스템 콜을 모니터링하고 프로세스 생성/권한 상승 같은 비인가 행위를 방지합니다. 마지막으로, KVM의 VMX(Virtual Machine Extensions) 명령을 에뮬레이션합니다. Hyper-box가 KVM의 권한을 Ring 0로 강등하기 때문에 KVM은 VMX 명령을 실행할 수 없습니다. 따라서 Hyper-box가 Intel VT의 VMCS shadowing 및 VPID 기능을 활용해 대신 VMX 명령을 수행합니다.
+Hyper-box는 탈출을 방지하기 위한 핵심 메커니즘을 가지고 있습니다. 
 
-Tailored Linux kernel은 원본 커널을 재컴파일한 버전입니다. 공격 표면을 줄이기 위해 레거시 시스템 콜 인터페이스를 제거했습니다. 또한 Hyper-box가 탈출 방지를 위해 코드 및 RO 데이터를 보호하므로, 런타임 코드 수정 기능을 제거했습니다.
+첫째, Intel VT(Virtualization Technology)의 메모리/레지스터 보호 기법을 사용합니다. 
+EPT(Extended Page Table)와 제어 레지스터(CR) 모니터링 기능을 활용해 비인가 코드 및 읽기 전용 데이터 영역을 보호합니다. 
+
+둘째, 하드웨어 브레이크포인트를 이용해 모든 시스템 콜을 모니터링하고 프로세스 생성/권한 상승 같은 비인가 행위를 방지합니다. 
+
+마지막으로, KVM의 VMX(Virtual Machine Extensions) 명령을 에뮬레이션합니다. Hyper-box가 KVM의 권한을 Ring 0로 강등하기 때문에 KVM은 VMX 명령을 실행할 수 없습니다. 따라서 Hyper-box가 Intel VT의 VMCS shadowing 및 VPID 기능을 활용해 대신 VMX 명령을 수행합니다.
+
+Tailored Linux kernel은 원본 커널을 재컴파일한 버전입니다. 
+공격 표면을 줄이기 위해 레거시 시스템 콜 인터페이스를 제거했습니다. 
+또한 Hyper-box가 탈출 방지를 위해 코드 및 RO 데이터를 보호하므로, 런타임 코드 수정 기능을 제거했습니다.
 
 Alcatraz에 대해 더 알고 싶다면 [Black Hat USA 2021](https://www.blackhat.com/us-21/briefings/schedule/index.html#alcatraz-a-practical-hypervisor-sandbox-to-prevent-escapes-from-the-kvmqemu-and-kvm-based-microvms-22875) 발표 자료를 참고하세요.
 
@@ -346,6 +380,7 @@ Alcatraz의 Hyper-box는 커널 코드, 읽기 전용 데이터, 시스템 테�
 
  * 시스템 전원 관리(최대절전/절전, hibernate 및 suspend)
    * 일부 머신은 최대절전/절전 중에 보호되는 영역을 수정할 수 있습니다.
+
  * 모듈 언로드(module unloading)
    * Hyper-box는 모듈의 코드와 읽기 전용 데이터를 보호합니다. 따라서 모듈을 언로드하면 문제가 생길 수 있습니다. 모듈을 언로드하지 마세요. 정말로 필요하다면 `hyper_box.h`의 `HYPERBOX_USE_MODULE_PROTECTION`을 0으로 설정하세요.
 
@@ -362,25 +397,34 @@ VMWARE Setting
 
 hyper_box_init()
 	hb_print_hyper_box_logo() - 로고 출력
+
 	cpuid_count(1, 0, ...) - cpu id 정보를 얻어옴	
 		VMX, SMX 체크
 			Virtual Machine Extensions
 			Safer Mode Extensions : 신뢰할 수 있는 컴퓨팅 기반을 제공
+
 	msr = hb_rdmsr(MSR_iA32_FEAT_CTL)...
 		VMX가 BIOS으로 인해 락 걸려있는지 확인
+
 	hb_rdmsr(MSR_IA32_VMX_PROCBASED_CTLS2) >> 32 & VM_BIT_VM_SEC_PROC_CTRL_VMCS_SHADOWING
 		VMCS Shadowing : 하이퍼바이저가 게스트 가상 머신의 VMCS를 캐시, VMCS 갱신 시에 메모리 액세스를 최소화하여 성능을 향상
+
 	hb_rdmsr(MSR_IA32_VMX_PROCBASED_CTLS2) >> 32 & VM_BIT_VM_SEC_PROC_CTRL_ENABLE_VPID
 		VPID : TLB 관리에 각 가상 머신의 메모리 매핑을 할 수 있게 함 -> TLB 스위치 오버헤드 감소
+
 	hb_get_function_pointers() - 모듈에 필요한 함수들 초기화
+
 	cpuid_count(0x0D, 1, &eax, &ebx, &ecx, &edx);
 		XSAVES, XRSTORS : 고급 벡터 확장 기능, 부동 소수점 및 벡터 상태 레지스터 -> 프로세서 상태의 저장 및 복원을 효율적으로 가능하게 도와줌 - 프로세서의 성능 최적화
+
 	register_pm_notifier(g_hb_sleep_nb_ptr);
 		sleep 여부 감지
 			hb_start(1);
+
 	hb_alloc_vmcs_memory()
 		for(cpu 활성화된 수)
 			페이지 할당
+
 	USE_EPT
 	hb_alloc_ept_pages()
 	hb_protect_vmcs()
