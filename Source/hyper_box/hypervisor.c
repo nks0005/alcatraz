@@ -333,16 +333,16 @@ static int __init hyper_box_init(void)
 	hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "Initialize VMX\n");
 	hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] Check virtualization, %08X, "
 		"%08X, %08X, %08X\n", eax, ebx, ecx, edx);
-	if (ecx & CPUID_1_ECX_VMX)
-	{
-		hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] VMX support\n");
-	}
-	else
-	{
-		hb_printf(LOG_LEVEL_ERROR, LOG_ERROR "    [*] VMX not support\n");
-		hb_error_log(ERROR_HW_NOT_SUPPORT);
-		return -1;
-	}
+		if (ecx & CPUID_1_ECX_VMX)
+		{
+			hb_printf(LOG_LEVEL_DETAIL, LOG_INFO "    [*] VMX support\n");
+		}
+		else
+		{
+			hb_printf(LOG_LEVEL_ERROR, LOG_ERROR "    [*] VMX not support\n");
+			hb_error_log(ERROR_HW_NOT_SUPPORT);
+			return -1;
+		}
 
 	if (ecx & CPUID_1_ECX_SMX)
 	{
@@ -474,7 +474,7 @@ static int __init hyper_box_init(void)
 		hb_error_log(ERROR_MEMORY_ALLOC_FAIL);
 		goto ERROR_HANDLE;
 	}
-	hb_setup_ept_pagetable_4KB();
+	hb_setup_ept_pagetable_4KB(); 
 #endif /* HYPERBOX_USE_EPT */
 
 	hb_protect_kernel_ro_area();
@@ -879,27 +879,97 @@ static void hb_alloc_vmcs_memory(void)
  	int cpu_count;
  	int i;
 
+	/*
+	 * 온라인 상태인 CPU 개수(= 실제로 VMX를 켜서 운용할 코어 수)를 구한다.
+	 * 왜?
+	 * - VMCS/스택/비트맵 같은 VMX 관련 상태는 일반적으로 per-CPU로 필요하다.
+	 * - 이후 루프에서 CPU 개수만큼 각각의 리소스를 미리 할당해둔다.
+	 */
 	cpu_count = num_online_cpus();
 
 	hb_printf(LOG_LEVEL_DEBUG, LOG_INFO "Alloc VMCS Memory\n");
 
+	/*
+	 * 각 CPU 코어별로 VMX 운용에 필요한 메모리를 할당한다.
+	 * 왜 미리 한 번에 할당하나?
+	 * - VMX 진입/운영 중에 메모리 할당 실패가 나면 복구가 매우 어렵고,
+	 *   VM-entry 실패/불안정으로 이어질 수 있어 초기화 단계에서 선할당하는 편이 안전하다.
+	 */
 	for (i = 0 ; i < cpu_count ; i++)
 	{
+		/*
+		 * VMXON/Host VMCS 용 메모리 할당.
+		 * - __get_free_pages(): 물리적으로 연속된 페이지를 확보한다.
+		 * - VMCS는 CPU가 물리 주소 기반으로 참조하며 정렬/연속성 요구가 있어
+		 *   vmalloc보다는 페이지 단위 할당을 쓰는 경우가 많다.
+		 * - VMCS_SIZE_ORDER: 2^order 페이지 크기로 확보(구조체 크기/정렬 요구 충족 목적)
+		 */
 		g_vmx_on_vmcs_log_addr[i] = (void*)__get_free_pages(GFP_KERNEL | __GFP_COLD,
 			VMCS_SIZE_ORDER);
+
+		/*
+		 * Guest VMCS 용 메모리 할당.
+		 * 왜 Host/Guest를 분리?
+		 * - 하이퍼바이저 설계에 따라 Host에서 사용하는 VMCS(또는 VMXON 영역)와
+		 *   게스트 상태를 담는 VMCS를 분리해 관리할 수 있다.
+		 */
 		g_guest_vmcs_log_addr[i] = (void*)__get_free_pages(GFP_KERNEL | __GFP_COLD,
 			VMCS_SIZE_ORDER);
+
+		/*
+		 * VMX 명령(VMPTRLD 등)은 VMCS "물리 주소"를 요구하므로,
+		 * 할당한 VMCS의 물리 주소를 미리 계산해 저장한다.
+		 */
 		g_guest_vmcs_phy_addr[i] = (u64) virt_to_phys(g_guest_vmcs_log_addr[i]);
 
+		/*
+		 * VM-exit 처리용 전용 스택 할당.
+		 * 왜?
+		 * - VM-exit 핸들러가 사용할 안정적인 스택을 확보해
+		 *   기존 커널 스택과의 간섭/오염 가능성을 줄이려는 목적이다.
+		 * - 스택은 물리 연속이 필수는 아니어서 vmalloc로 할당한다.
+		 */
 		g_vm_exit_stack_addr[i] = (void*)vmalloc(g_stack_size);
 
+		/*
+		 * I/O Bitmap A/B 할당.
+		 * 왜?
+		 * - 특정 I/O 포트(in/out) 접근을 VM-exit로 트랩할지 비트맵으로 제어한다.
+		 * - VMX 스펙상 I/O bitmap은 A/B 두 장을 사용하는 형태를 지원한다.
+		 */
 		g_io_bitmap_addrA[i] = (void*)__get_free_page(GFP_KERNEL | __GFP_COLD);
 		g_io_bitmap_addrB[i] = (void*)__get_free_page(GFP_KERNEL | __GFP_COLD);
+
+		/*
+		 * MSR Bitmap 할당.
+		 * 왜?
+		 * - 특정 MSR read/write를 VM-exit로 트랩할지 비트맵으로 제어한다.
+		 */
 		g_msr_bitmap_addr[i] = (void*)__get_free_page(GFP_KERNEL | __GFP_COLD);
+
+		/*
+		 * VMREAD/VMWRITE 관련 비트맵(프로젝트 정의)을 위한 페이지 할당.
+		 * 왜?
+		 * - VMREAD/VMWRITE 같은 VMX 명령을 모니터링/차단/예외 처리하려면
+		 *   별도 제어 데이터가 필요할 수 있으며, 여기서는 페이지 단위로 준비한다.
+		 */
 		g_vmread_bitmap_addr[i] = (void*)__get_free_page(GFP_KERNEL | __GFP_COLD);
 		g_vmwrite_bitmap_addr[i] = (void*)__get_free_page(GFP_KERNEL | __GFP_COLD);
+
+		/*
+		 * Virtual APIC Page 할당.
+		 * 왜?
+		 * - APIC virtualization(가상 APIC 페이지 기반) 기능 사용 시
+		 *   VMCS에 이 페이지 주소를 등록해 CPU가 인터럽트 관련 처리를 가속/지원한다.
+		 */
 		g_virt_apic_page_addr[i] = (void*)__get_free_page(GFP_KERNEL | __GFP_COLD);
 
+		/*
+		 * 하나라도 할당 실패(NULL)가 발생하면 초기화 자체가 불가능하므로 실패 처리.
+		 * 왜 goto error 패턴?
+		 * - 이미 앞에서 여러 리소스를 잡아둔 상태일 수 있어
+		 *   공통 cleanup 경로로 점프해 누수 없이 되돌리기 위해서다(커널 코드에서 흔한 패턴).
+		 */
 		if ((g_vmx_on_vmcs_log_addr[i] == NULL) || (g_guest_vmcs_log_addr[i] == NULL) ||
 			(g_vm_exit_stack_addr[i] == NULL) || (g_io_bitmap_addrA[i] == NULL) ||
 			(g_io_bitmap_addrB[i] == NULL) || (g_msr_bitmap_addr[i] == NULL) ||
@@ -911,6 +981,7 @@ static void hb_alloc_vmcs_memory(void)
 		}
 		else
 		{
+			/* 디버그 로그: 코어별로 실제 할당된 주소를 출력해 초기화 상태를 확인한다. */
 			hb_printf(LOG_LEVEL_DEBUG, LOG_INFO "    [*] VM[%d] Alloc Host VMCS"
 				" %016lX\n", i, g_vmx_on_vmcs_log_addr[i]);
 			hb_printf(LOG_LEVEL_DEBUG, LOG_INFO "    [*] VM[%d] Alloc Guest VMCS"
@@ -932,15 +1003,26 @@ static void hb_alloc_vmcs_memory(void)
 		}
 	}
 
+	/* 모든 코어에 대해 할당이 성공하면 정상 종료. */
 	return ;
 
 error:
+	/*
+	 * 실패 시 지금까지 확보한 리소스를 모두 해제(rollback)한다.
+	 * 왜?
+	 * - 커널 모듈/드라이버에서 메모리 누수는 시스템 안정성에 치명적이므로
+	 *   초기화 실패 경로에서는 반드시 정리해야 한다.
+	 */
 	for (i = 0 ; i < cpu_count ; i++)
 	{
+		/* order 단위로 할당했으므로 같은 order로 해제한다. */
 		__free_pages(g_vmx_on_vmcs_log_addr[i], VMCS_SIZE_ORDER);
 		__free_pages(g_guest_vmcs_log_addr[i], VMCS_SIZE_ORDER);
+
+		/* vmalloc로 할당한 스택은 vfree로 해제한다. */
 		vfree(g_vm_exit_stack_addr[i]);
 
+		/* 단일 페이지(1 page)는 order=0으로 해제한다. */
 		__free_pages(g_io_bitmap_addrA[i], 0);
 		__free_pages(g_io_bitmap_addrB[i], 0);
 		__free_pages(g_msr_bitmap_addr[i], 0);
