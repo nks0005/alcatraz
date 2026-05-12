@@ -43,19 +43,3 @@ VMX 논루트 동작에서의 프로세서 동작은 가상화를 용이하게 �
 
 논리 프로세서가 VMX 논루트 동작에 있는지 여부를 나타내는 **소프트웨어에 보이는 비트 — software-visible bit**는 없다. 
 이 사실은 **VMM (Virtual-machine Monitor)**이 게스트 소프트웨어가 자신이 **VM (Virtual Machine)**에서 실행 중임을 판별하지 못하게 하는 데 활용될 수 있다. VMX 동작은 **CPL (Current Privilege Level) 0**에서 실행되는 소프트웨어에도 제한을 가하므로, 게스트 소프트웨어는 원래 설계된 권한 레벨에서 실행할 수 있다. 이 능력은 **VMM (Virtual-machine Monitor)** 개발을 단순화할 수 있다.
-
----
-
-## 작업 요약 및 쉬운 설명
-
-- **무엇을 했는지:** 약자는 **영어 풀어쓰기**가 드러나게 정리했다. 항목 제목·최초 정의·요약에는 `약자 (English Full Form)` 형태를 쓰고, 바로 이어지는 문장에서는 같은 항목 안에서만 약자만 반복해 읽기 부담을 줄였다.
-
-- **용어 참고:** Intel SDM에서 **VMM**은 **Virtual-machine Monitor**이며, 말로 흔히 쓰는 “Virtual Machine **Manager**”와는 다른 공식 용어다.
-
-- **내용을 쉽게 말하면:**
-  - **VMX (Virtual-machine Extensions)**는 CPU가 “호스트(**VMM (Virtual-machine Monitor)**)”와 “게스트(**VM (Virtual Machine)** 안의 **OS (Operating System)** / 앱)”를 나눠 다루기 위한 **프로세서 쪽 가상화 확장**이다.
-  - **VMM (Virtual-machine Monitor)**은 하드웨어를 실제로 쥐고 있고, 게스트는 마치 실제 PC인 것처럼 동작하지만 권한은 낮춰 두어 **VMM (Virtual-machine Monitor)**이 자원을 계속 통제할 수 있게 한다.
-  - **루트(root) 모드**는 **VMM (Virtual-machine Monitor)**이 도는 쪽(거의 일반 CPU + **VMX (Virtual-machine Extensions)** 전용 명령), **논루트(non-root) 모드**는 게스트가 도는 쪽(위험한/특수한 일은 하다가 **VM exit (Virtual-machine exit)**로 **VMM (Virtual-machine Monitor)**에게 넘김)이다.
-  - **“지금 논루트냐?”를 알려 주는 공개 플래그가 없다**는 점은, 게스트가 “나 **VM (Virtual Machine)** 안이네?”를 쉽게 못 알아채게 하려는 설계와 맞닿아 있다.
-
-원하시면 **25.4**부터 같은 방식으로 이어서 붙이면 된다.
