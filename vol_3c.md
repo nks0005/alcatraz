@@ -393,17 +393,25 @@ VMX 동작에서 바르게 동작하려면 소프트웨어는 VMCS 영역과 관
 
 **VMCS 데이터 — VMCS data**는 다음 **여섯 가지 논리 그룹**으로 구성된다.
 
-- **게스트 상태 영역 — guest-state area:** **VM 종료 — VM exit** 시 프로세서 상태가 이 영역에 저장되고, **VM 진입 — VM entry** 시 이 영역에서 적재된다.
+- **게스트 상태 영역 — guest-state area:** 
+**VM 종료 — VM exit** 시 프로세서 상태가 이 영역에 저장되고, **VM 진입 — VM entry** 시 이 영역에서 적재된다.
 
-- **호스트 상태 영역 — host-state area:** **VM 종료** 시 이 영역에서 프로세서 상태가 적재된다.
+- **호스트 상태 영역 — host-state area:** 
+**VM 종료** 시 이 영역에서 프로세서 상태가 적재된다.
 
-- **VM 실행 제어 필드 — VM-execution control fields:** 이 필드들은 **VMX 논루트 동작 — VMX non-root operation**에서의 프로세서 동작을 제어한다. **VM 종료**의 원인을 **부분적으로** 결정한다.
+- **VM 실행 제어 필드 — VM-execution control fields:** 
+이 필드들은 **VMX 논루트 동작 — VMX non-root operation**에서의 프로세서 동작을 제어한다. 
+**VM 종료**의 원인을 **부분적으로** 결정한다.
 
-- **VM 종료 제어 필드 — VM-exit control fields:** 이 필드들은 **VM 종료**를 제어한다.
+- **VM 종료 제어 필드 — VM-exit control fields:** 
+이 필드들은 **VM 종료**를 제어한다.
 
-- **VM 진입 제어 필드 — VM-entry control fields:** 이 필드들은 **VM 진입**을 제어한다.
+- **VM 진입 제어 필드 — VM-entry control fields:** 
+이 필드들은 **VM 진입**을 제어한다.
 
-- **VM 종료 정보 필드 — VM-exit information fields:** 이 필드들은 **VM 종료**에 관한 정보를 받으며, **VM 종료**의 원인과 성격을 기술한다. 일부 프로세서에서는 이 필드들이 **읽기 전용**이다.⁴
+- **VM 종료 정보 필드 — VM-exit information fields:** 
+이 필드들은 **VM 종료**에 관한 정보를 받으며, **VM 종료**의 원인과 성격을 기술한다. 
+일부 프로세서에서는 이 필드들이 **읽기 전용**이다.⁴
 
 **VM 실행 제어 필드**, **VM 종료 제어 필드**, **VM 진입 제어 필드**는 때로 **VMX 제어 — VMX controls**라고 통칭한다.
 
