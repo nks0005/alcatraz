@@ -51,4 +51,66 @@
     - 일반(비-nested) VMCS는 비트 31이 0, shadow VMCS는 1로 설정  
     - (VMCS shadowing 지원 여부는 IA32_VMX_PROCBASED_CTLS2 MSR로 확인)
 
-## 
+## VMCS / shadow VMCS
+
+**역할 구분 (헷갈리기 쉬운 것)**
+
+| 구분 | 무엇인가 |
+|------|----------|
+| **VMCS 포인터** | `VMPTRLD` / `VMPTRST` — CPU당 **현재 VMCS** 하나 |
+| **VMCS 링크 포인터** | **일반 VMCS 안 필드** — **섀도 VMCS** 4KB의 **물리 주소** |
+| **비트 31** | VMCS 영역 첫 4바이트 — 이 4KB가 **섀도 VMCS**인지 표시 |
+
+> `VMPTRLD`는 비트 31과 무관하게 **그 VMCS를 current로 올린다**.  
+> “0=교체, 1=기존 VMCS에 연결” **아님**. 연결은 **링크 포인터**로 한다.
+
+---
+
+### 관행: Intel nested + VMCS shadowing (L0/L1)
+
+**전제:** secondary proc-based **VMCS shadowing** = 1, L1이 VMX non-root에서 VMX 명령 사용.
+
+1. L0가 **일반 VMCS**(비트 31 = 0)를 `VMPTRLD` → **current**
+2. L0가 **일반 VMCS**에 `VMWRITE` → **VMCS link pointer** = **섀도 VMCS** 물리 주소
+3. **섀도 VMCS** 영역: 리비전 + **비트 31 = 1**, 나머지 0 등 초기화
+4. **VM entry** 성공 시 → 링크가 가리키는 섀도 VMCS가 **활성(active)**  
+   **current**는 계속 **일반 VMCS** (VM entry·`VMLAUNCH`/`VMRESUME` 대상)
+5. L1(게스트 하이퍼바이저)의 `VMREAD`/`VMWRITE`는 **활성 섀도 VMCS** 쪽으로 동작
+6. 섀도잉 안 쓸 때: 링크 포인터 = `FFFFFFFF_FFFFFFFFH`
+
+**L1이 `VMPTRLD`를 실행하는 경우 (하드웨어 nested):**  
+VMX non-root에서 `VMPTRLD` → **VM exit** → L0가 정책에 따라 처리(다른 VMCS로 바꾸거나, shadowing으로 링크 갱신 등).  
+**CPU가 L1 오퍼랜드를 그대로 current로 올리지는 않는** 경우가 일반적(구현·설정에 따름).
+
+---
+
+### Alcatraz (Hyper-box): KVM VMX 명령 에뮬레이션
+
+**배경:** Hyper-box가 **VMX root**, KVM은 **VMX non-root**(Ring 0이지만 진짜 VMX root 아님).  
+KVM의 `VMPTRLD`/`VMREAD`/`VMWRITE` 등은 **VM exit**로 L0에 넘어감.
+
+**게스트 `VMPTRLD` 시 Hyper-box가 하는 일** (하드웨어 `VMPTRLD` **실행 안 함**):
+
+1. 게스트 메모리에서 오퍼랜드(**nested VMCS** 물리 주소) 읽기
+2. 게스트 **RIP** 진행 + **CF/ZF** 성공 처리
+3. nested VMCS 영역 **비트 31 = 1** (섀도 표시), `VMCLEAR` 등으로 초기화
+4. **지금 current인 Hyper-box guest VMCS**에 **`VMCS link pointer`** = nested VMCS 주소 (`VMWRITE`)
+5. **`g_nested_vmcs_ptr`** 등에 주소 저장
+
+→ **CPU current = Hyper-box guest VMCS 유지**, KVM이 만지는 VMCS 내용 = **섀도 + 링크**로 연결.
+
+**nested VM exit** 시에도 비슷하게, 나온 VMCS(`prev_vmcs`)를 섀도로 링크하는 경로 있음.
+
+**호스트 KVM과 충돌:** Alcatraz가 **VMCS shadowing** 슬롯을 씀 → nested 쓸 때  
+`modprobe kvm_intel enable_shadow_vmcs=0` (README 참고).
+
+---
+
+### 한 줄 비교
+
+| | **관행 (Intel shadowing)** | **Alcatraz** |
+|---|---------------------------|--------------|
+| L0 current | 일반 VMCS | **guest VMCS** 고정 |
+| L1 `VMPTRLD` | L0가 exit에서 처리(정책 다양) | **에뮬**: 링크만 설정, **HW `VMPTRLD` 없음** |
+| L1 VMCS 조작 | **활성 섀도** | 링크된 **nested VMCS(섀도)** |
+| VMCS shadowing | L0 하이퍼바이저가 사용 | **Hyper-box**가 사용, **호스트 KVM은 끔** |

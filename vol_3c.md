@@ -353,10 +353,60 @@ VMCS 영역의 **첫 4바이트**에는 **비트 30:0**에 **VMCS 리비전 식�
 (**섀도 VMCS 표시**가 1인데 프로세서가 **“VMCS 섀도잉 — VMCS shadowing”** VM 실행 제어의 1-설정을 지원하지 않는 경우에도 **VMPTRLD**는 실패한다; 26.6.2절 참고.) 소프트웨어는 VMX 기능 MSR **IA32_VMX_BASIC**을 읽어 해당 프로세서가 사용하는 **VMCS 리비전 식별자**를 알 수 있다(부록 A.1).
 
 소프트웨어는 VMCS가 **일반 VMCS**인지 **섀도 VMCS**인지에 따라 **섀도 VMCS 표시**를 클리어하거나 설정해야 한다(26.10절). 
-**섀도 VMCS 표시**가 설정되어 있는데 프로세서가 **“VMCS 섀도잉”** VM 실행 제어의 1-설정을 지원하지 않으면 **VMPTRLD**는 실패한다. 이 설정에 대한 지원 여부는 VMX 기능 MSR **IA32_VMX_PROCBASED_CTLS2**로 확인할 수 있다(부록 A.3.3).
 
-VMCS 영역의 **다음 4바이트**(오프셋 4)는 **VMX 중단 표시 — VMX-abort indicator**에 쓰인다. 이 비트들의 내용은 **어떤 방식으로도** 프로세서 동작을 제어하지 않는다. **VMX 중단 — VMX abort**가 발생하면 논리 프로세서는 이 비트들에 **0이 아닌 값**을 기록한다(29.7절 참고). 소프트웨어가 이 필드에 쓰는 것도 허용된다.
 
-VMCS 영역의 **나머지**는 **VMCS 데이터**에 사용된다(VMX 논루트 동작과 VMX 전환을 제어하는 VMCS의 그 부분). 이 데이터의 형식은 **구현 고유**이다. VMCS 데이터는 **26.3절부터 26.9절**까지 다룬다. VMX 동작에서 바르게 동작하려면 소프트웨어는 VMCS 영역과 관련 구조(26.11.4절에 열거됨)를 **쓰기-백 캐시 가능 — writeback cacheable** 메모리로 유지해야 한다. 향후 구현에서는 **다른 메모리 타입**을 허용하거나 요구할 수 있다. 소프트웨어는 VMX 기능 MSR **IA32_VMX_BASIC**을 참고해야 한다(부록 A.1).
+
+**섀도 VMCS 표시**가 설정되어 있는데 프로세서가 **“VMCS 섀도잉”** VM 실행 제어의 1-설정을 지원하지 않으면 **VMPTRLD**는 실패한다. 
+이 설정에 대한 지원 여부는 VMX 기능 MSR **IA32_VMX_PROCBASED_CTLS2**로 확인할 수 있다(부록 A.3.3).
+
+VMCS 영역의 **다음 4바이트**(오프셋 4)는 **VMX 중단 표시 — VMX-abort indicator**에 쓰인다. 
+
+이 비트들의 내용은 **어떤 방식으로도** 프로세서 동작을 제어하지 않는다. 
+
+**VMX 중단 — VMX abort**가 발생하면 논리 프로세서는 이 비트들에 **0이 아닌 값**을 기록한다(29.7절 참고). 소프트웨어가 이 필드에 쓰는 것도 허용된다.
+
+VMCS 영역의 **나머지**는 **VMCS 데이터**에 사용된다(VMX 논루트 동작과 VMX 전환을 제어하는 VMCS의 그 부분). 
+이 데이터의 형식은 **구현 고유**이다. 
+
+VMCS 데이터는 **26.3절부터 26.9절**까지 다룬다. 
+
+VMX 동작에서 바르게 동작하려면 소프트웨어는 VMCS 영역과 관련 구조(26.11.4절에 열거됨)를 **쓰기-백 캐시 가능 — writeback cacheable** 메모리로 유지해야 한다. 
+
+향후 구현에서는 **다른 메모리 타입**을 허용하거나 요구할 수 있다. 
+소프트웨어는 VMX 기능 MSR **IA32_VMX_BASIC**을 참고해야 한다(부록 A.1).
+
+### 추가 설명: VMCS 링크 포인터, 섀도 VMCS, `VMPTRLD`
+
+**VMCS 포인터**(`VMPTRLD` / `VMPTRST`로 다루는 **현재 VMCS**)와 **VMCS 링크 포인터**(현재 **일반 VMCS** 안 필드)는 역할이 다르다.
+
+| 구분 | 역할 |
+|------|------|
+| **VMCS 포인터** (`VMPTRLD` / `VMPTRST`) | 논리 CPU당 **현재 VMCS** 하나. `VMREAD` / `VMWRITE` / `VMLAUNCH` / `VMRESUME` 대상 |
+| **VMCS 링크 포인터** (일반 VMCS 내부) | **섀도 VMCS** 4KB 영역의 **64비트 물리 주소**. **“VMCS 섀도잉”** VM 실행 제어가 1이고 **VM 진입**이 성공하면, 링크가 가리키는 VMCS가 **활성(active)** 이 되고 **현재 VMCS**는 일반 VMCS로 유지(26.1절) |
+| **섀도 VMCS 표시**(영역 오프셋 0, **비트 31**) | 그 4KB가 **섀도 VMCS**임을 표시. **VM 진입용 VMCS로는 사용 불가**(26.10절) |
+
+**`VMPTRLD`와 비트 31:** `VMPTRLD`는 **비트 31 값과 무관하게** 오퍼랜드 VMCS를 **현재·활성**으로 올린다. “비트 0이면 교체, 1이면 기존 VMCS에 연결” 규칙은 **없다**. 섀도 연결은 **`VMWRITE`로 링크 포인터에 섀도 주소를 쓰고**, **VMCS shadowing**을 켠 뒤 **VM entry**로 섀도를 **활성**시키는 쪽이 nested에서의 정석 패턴이다. 섀도잉을 쓰지 않을 때 링크 포인터는 보통 `FFFFFFFF_FFFFFFFFH`.
+
+**Alcatraz(Hyper-box) 요약:** 게스트(KVM)는 **VMX non-root**에서 `VMPTRLD`를 실행하면 **VM exit**가 난다(루트가 아니므로 CPU가 nested VMCS를 current로 바꾸지 않음). Hyper-box는 exit에서 **하드웨어 `VMPTRLD`를 실행하지 않고**, (1) 오퍼랜드 주소를 **nested VMCS**로 기억하고, (2) 그 영역 **비트 31 = 1**(섀도 표시), (3) **지금 current인 guest VMCS**에 **`VMCS link pointer`** = nested VMCS 물리 주소를 **`VMWRITE`**로 설정한다. 게스트에는 **성공한 것처럼** RIP·플래그만 맞춰 준다. 따라서 **CPU current는 Hyper-box guest VMCS**가 유지되고, KVM이 조작하는 VMCS 내용은 **섀도 + 링크**로 연결된다. 호스트 KVM의 VMCS shadowing은 Alcatraz와 충돌하므로 끄는 것이 README 권장 사항이다.
+
+## 26.3 VMCS 데이터의 구성(Organization of VMCS Data)
+
+**VMCS 데이터 — VMCS data**는 다음 **여섯 가지 논리 그룹**으로 구성된다.
+
+- **게스트 상태 영역 — guest-state area:** **VM 종료 — VM exit** 시 프로세서 상태가 이 영역에 저장되고, **VM 진입 — VM entry** 시 이 영역에서 적재된다.
+
+- **호스트 상태 영역 — host-state area:** **VM 종료** 시 이 영역에서 프로세서 상태가 적재된다.
+
+- **VM 실행 제어 필드 — VM-execution control fields:** 이 필드들은 **VMX 논루트 동작 — VMX non-root operation**에서의 프로세서 동작을 제어한다. **VM 종료**의 원인을 **부분적으로** 결정한다.
+
+- **VM 종료 제어 필드 — VM-exit control fields:** 이 필드들은 **VM 종료**를 제어한다.
+
+- **VM 진입 제어 필드 — VM-entry control fields:** 이 필드들은 **VM 진입**을 제어한다.
+
+- **VM 종료 정보 필드 — VM-exit information fields:** 이 필드들은 **VM 종료**에 관한 정보를 받으며, **VM 종료**의 원인과 성격을 기술한다. 일부 프로세서에서는 이 필드들이 **읽기 전용**이다.⁴
+
+**VM 실행 제어 필드**, **VM 종료 제어 필드**, **VM 진입 제어 필드**는 때로 **VMX 제어 — VMX controls**라고 통칭한다.
+
+**참고:** ⁴ 일부 프로세서에서는 **VM 종료 정보 필드**가 읽기 전용이다.
 
 
