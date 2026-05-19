@@ -114,3 +114,46 @@ KVM의 `VMPTRLD`/`VMREAD`/`VMWRITE` 등은 **VM exit**로 L0에 넘어감.
 | L1 `VMPTRLD` | L0가 exit에서 처리(정책 다양) | **에뮬**: 링크만 설정, **HW `VMPTRLD` 없음** |
 | L1 VMCS 조작 | **활성 섀도** | 링크된 **nested VMCS(섀도)** |
 | VMCS shadowing | L0 하이퍼바이저가 사용 | **Hyper-box**가 사용, **호스트 KVM은 끔** |
+
+
+
+
+### VMCS 6개 영역
+
+VMCS 4KB 안을 Intel SDM 기준 **6개 구역**으로 나눈다.  
+**VMM이 설정**하는 영역과 **CPU가 VM exit 시 기록**하는 영역을 구분하는 것이 핵심이다.
+
+| 영역 | 누가 쓰나 | 하는 일 |
+|------|-----------|---------|
+| **guest state area** | VMM (VM entry 전) | 게스트 **CPU 상태** 스냅샷: GPR 일부, **CR/DR**, **RIP/RSP**, 세그먼트, 일부 **MSR** 등 → “이 상태로 게스트 진입” |
+| **host state area** | VMM (VM entry 전) | **VM exit** 시 복귀할 **호스트(VMM) 상태**: 호스트 **RIP/RSP/CR3**, 세그먼트 등 |
+| **VM-execution control fields** | VMM | **게스트 실행 중** 규칙: 어떤 이벤트에 **VM exit** 할지, 인터럽트·I/O·MSR·2차 control(**VMCS shadowing** 등) |
+| **VM-exit control fields** | VMM | **exit 할 때** 동작: 호스트 주소 공간 크기, **MSR 로드** 등 |
+| **VM-entry control fields** | VMM | **entry 할 때** 동작: 게스트 **IA-32e** 진입, **이벤트 주입** 등 |
+| **VM-exit information fields** | **CPU** (exit 시) | **왜** 나왔는지: **exit reason**, qualification, 게스트 **RIP** 등 → VMM 핸들러가 읽음 |
+
+**한 줄 요약**
+
+- **guest / host state** = VM entry·exit 시 **복원할 CPU 상태**
+- **execution / entry / exit control** = VMM이 정하는 **규칙·전환 방식**
+- **exit information** = exit **이후** CPU가 적는 **결과·로그** (control과 반대)
+
+**VM entry / exit 흐름**
+
+```text
+[VM entry 전]   VMM이 guest·host state + execution·entry·exit control 설정
+[VMX non-root]  게스트 실행 — execution control이 “무엇에 exit 할지” 결정
+[VM exit]       CPU가 exit information 기록 → VMM이 reason 보고 처리
+[VM entry]      guest state·control 갱신 후 VMLAUNCH / VMRESUME
+```
+
+**execution control — 적어 둔 두 가지 의미**
+
+1. **VM exit 원인을 부분적으로 결정** — 예: 특정 **MSR** 접근, **CR 쓰기**, **I/O**, **VMX 명령** 시 exit 유발 여부  
+2. **VMX non-root에서 프로세스 동작 제어** — 게스트가 허용받는 **권한·이벤트·가상화 동작** 범위
+
+**Alcatraz 맥락**
+
+- KVM `VMREAD` / `VMWRITE` 대상 = **게스트 VMCS** 또는 **링크된 섀도(nested) VMCS**의 위 6개 영역.  
+- Hyper-box는 **current VMCS**를 유지하고 **VMCS link pointer**로 nested VMCS 연결 (위 “관행 / Alcatraz” 절 참고).  
+- **secondary proc-based control**의 **VMCS shadowing** 등은 **execution control** 쪽에 속한다.
