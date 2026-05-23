@@ -8,21 +8,19 @@ obj-m := hypervisor_b.o
 
 KVERSION := $(shell uname -r)
 KDIR := /lib/modules/$(KVERSION)/build
-NASM := $(shell command -v nasm 2>/dev/null)
+NASM := nasm
 
 ccflags-y := -fno-toplevel-reorder
 
-ifneq ($(NASM),)
 hypervisor_b-objs := hb_probe.o asm_helper.o
+
 %.o: %.asm
 	$(NASM) -f elf64 -o $@ $<
 	touch "$(CURDIR)/.asm_helper.o.cmd"
-else
-hypervisor_b-objs := hb_probe.o asm_helper_fallback.o
-$(warning nasm not found: install with "sudo apt install nasm", or using asm_helper_fallback.c)
-endif
 
 all:
+	@command -v $(NASM) >/dev/null 2>&1 || \
+		(echo "error: nasm not found (install: sudo apt install nasm)" >&2; exit 1)
 	$(MAKE) -C $(KDIR) M=$(CURDIR) modules
 
 clean:
