@@ -8,6 +8,7 @@
 #include <linux/mm.h>
 #include <linux/interrupt.h>
 #include <linux/preempt.h>
+#include <linux/namei.h>
 #include <asm/page.h>
 #include <asm/processor.h>
 #include <asm/msr.h>
@@ -47,6 +48,25 @@ static void hb_vmxoff_on_cpu(void *info);
 static int hb_vmx_startup_all_cpus(void);
 static void hb_vmx_teardown_all_cpus(void);
 
+static bool hb_module_loaded(const char *name)
+{
+	char path[48];
+	struct path p;
+	int ret;
+
+	snprintf(path, sizeof(path), "/sys/module/%s", name);
+	ret = kern_path(path, 0, &p);
+	if (ret)
+		return false;
+	path_put(&p);
+	return true;
+}
+
+static bool hb_is_kvm_loaded(void)
+{
+	return hb_module_loaded("kvm_intel") || hb_module_loaded("kvm");
+}
+
 static int __init hypervisor_init(void)
 {
 	int cpu_count;
@@ -64,6 +84,12 @@ static int __init hypervisor_init(void)
 		return -ENODEV;
 	}
 	pr_info(PRLOG "VMX supported (BIOS)\n");
+
+	if (hb_is_kvm_loaded()) {
+		pr_err(PRLOG "kvm/kvm_intel is loaded; VMXON conflicts with KVM. "
+			"Run: sudo modprobe -r kvm_intel kvm\n");
+		return -EBUSY;
+	}
 
 	cpu_count = num_online_cpus();
 	cpu_id = smp_processor_id();
@@ -83,7 +109,8 @@ static int __init hypervisor_init(void)
 		return ret;
 	}
 
-	pr_info(PRLOG "all online cpus: VMXON/VMCLEAR/VMPTRLD probe ok (VMXOFF before return)\n");
+	pr_info(PRLOG "all %u online cpus: VMXON/VMCLEAR/VMPTRLD probe ok "
+		"(VMXOFF before return)\n", num_online_cpus());
 	return 0;
 }
 
@@ -265,6 +292,7 @@ static void hb_vmxon_on_cpu(void *info)
 	}
 
 	vmx_on = true;
+	pc->vmx_on = true;
 
 	vmcs_pa = (u64)__pa(pc->vmcs_region);
 	ret = hb_clear_vmcs(&vmcs_pa);
@@ -288,6 +316,7 @@ out_vmxoff:
 	if (vmx_on) {
 		hb_stop_vmx();
 		vmx_on = false;
+		pc->vmx_on = false;
 	}
 out_restore_cr:
 	hb_disable_vmx();
@@ -317,22 +346,29 @@ static void hb_vmxoff_on_cpu(void *info)
 
 static int hb_vmx_startup_all_cpus(void)
 {
+	unsigned int cpu;
+
 	atomic_set(&g_vmx_probe_failed, 0);
 
-	on_each_cpu(hb_vmxon_on_cpu, NULL, 1);
-
-	if (atomic_read(&g_vmx_probe_failed))
-		return -EIO;
+	for_each_online_cpu(cpu) {
+		pr_info(PRLOG "VMX probe on cpu %u\n", cpu);
+		smp_call_function_single(cpu, hb_vmxon_on_cpu, NULL, 1);
+		if (atomic_read(&g_vmx_probe_failed))
+			return -EIO;
+	}
 
 	return 0;
 }
 
 static void hb_vmx_teardown_all_cpus(void)
 {
+	unsigned int cpu;
+
 	if (!g_vmx)
 		return;
 
-	on_each_cpu(hb_vmxoff_on_cpu, NULL, 1);
+	for_each_online_cpu(cpu)
+		smp_call_function_single(cpu, hb_vmxoff_on_cpu, NULL, 1);
 }
 
 static void __exit hypervisor_exit(void)
