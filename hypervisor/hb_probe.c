@@ -6,6 +6,8 @@
 #include <linux/smp.h>
 #include <linux/cpumask.h>
 #include <linux/mm.h>
+#include <linux/interrupt.h>
+#include <linux/preempt.h>
 #include <asm/page.h>
 #include <asm/processor.h>
 #include <asm/msr.h>
@@ -74,14 +76,14 @@ static int __init hypervisor_init(void)
 	if (ret)
 		return ret;
 
-	ret = hb_vmx_startup_all_cpus();
+	// ret = hb_vmx_startup_all_cpus();
 	// if (ret) {
 	// 	hb_vmx_teardown_all_cpus();
 	// 	hb_vmx_free_regions();
 	// 	return ret;
 	// }
 
-	pr_info(PRLOG "all online cpus: VMXON + guest VMCS clear/load ok\n");
+	pr_info(PRLOG "all online cpus: VMXON/VMCLEAR/VMPTRLD probe ok (VMXOFF before return)\n");
 	return 0;
 }
 
@@ -127,16 +129,18 @@ static void hb_adjust_vmx_cr0_cr4(void)
 	u64 cr0, cr4;
 	u64 cr0_fixed0, cr0_fixed1, cr4_fixed0, cr4_fixed1;
 
-	cr0_fixed0 = hb_rdmsr(MSR_IA32_VMX_CR0_FIXED0);
-	cr0_fixed1 = hb_rdmsr(MSR_IA32_VMX_CR0_FIXED1);
-	cr4_fixed0 = hb_rdmsr(MSR_IA32_VMX_CR4_FIXED0);
-	cr4_fixed1 = hb_rdmsr(MSR_IA32_VMX_CR4_FIXED1);
+	// MSR_IA32_VMX_...
+	cr0_fixed0 = hb_rdmsr(MSR_IA32_VMX_CR0_FIXED0); // do 1
+ 	cr0_fixed1 = hb_rdmsr(MSR_IA32_VMX_CR0_FIXED1); // do 0
 
-	cr0 = hb_get_cr0();
-	cr0 |= cr0_fixed0;
-	cr0 &= cr0_fixed1;
-	hb_set_cr0(cr0);
+	 cr0 = hb_get_cr0();
+	 cr0 |= cr0_fixed0;
+	 cr0 &= cr0_fixed1;
+	 hb_set_cr0(cr0);
 
+	cr4_fixed0 = hb_rdmsr(MSR_IA32_VMX_CR4_FIXED0); // do 1
+	cr4_fixed1 = hb_rdmsr(MSR_IA32_VMX_CR4_FIXED1); // do 0
+	
 	cr4 = hb_get_cr4();
 	cr4 |= cr4_fixed0;
 	cr4 &= cr4_fixed1;
@@ -225,6 +229,7 @@ static void hb_vmxon_on_cpu(void *info)
 
 	(void)info;
 
+	// 한번이라도 실패 여부 확인
 	if (atomic_read(&g_vmx_probe_failed))
 		return;
 
@@ -237,29 +242,42 @@ static void hb_vmxon_on_cpu(void *info)
 	*(u32 *)pc->vmxon_region = g_vmx_revision;
 	*(u32 *)pc->vmcs_region = g_vmx_revision;
 
-	hb_adjust_vmx_cr0_cr4();
-	hb_enable_vmx();
+	/*
+	 * VMX root 동안 인터럽트/선점이 들어오면 커널이 즉시 죽을 수 있음.
+	 * 프로브만 하고 VMXOFF 한 뒤 IRQ를 다시 켠다 (모듈 로드 중 VMXON 유지 금지).
+	 */
+	preempt_disable();
+	local_irq_disable();
+
+	hb_adjust_vmx_cr0_cr4(); // FIXED MSR -> CR0/CR4
+	hb_enable_vmx(); // CR4.VMXE = 1
 
 	vmxon_pa = (u64)__pa(pc->vmxon_region);
-	ret = hb_start_vmx(&vmxon_pa);
+	ret = hb_start_vmx(&vmxon_pa); // VMXON
+	// CF=1: VMXON 실패
+	// ZF=1: VMXON 실패 (무효 동작)
+	// rax = 0: VMXON 성공
+	// rax = -1: VMXON 실패
 	if (ret) {
 		pr_err(PRLOG "cpu %u: VMXON failed (%d)\n", cpu, ret);
 		hb_disable_vmx();
+		local_irq_enable();
+		preempt_enable();
 		atomic_set(&g_vmx_probe_failed, 1);
 		return;
 	}
 
-	pc->vmx_on = true;
 	pr_info(PRLOG "cpu %u: VMXON ok vmxon va=%p pa=0x%llx\n",
 		cpu, pc->vmxon_region, vmxon_pa);
 
-	vmcs_pa = (u64)__pa(pc->vmcs_region);
-	ret = hb_clear_vmcs(&vmcs_pa);
+	vmcs_pa = (u64)__pa(pc->vmcs_region); // VMCS PA
+	ret = hb_clear_vmcs(&vmcs_pa); // VMCLEAR
 	if (ret) {
 		pr_err(PRLOG "cpu %u: VMCLEAR failed (%d)\n", cpu, ret);
 		hb_stop_vmx();
 		hb_disable_vmx();
-		pc->vmx_on = false;
+		local_irq_enable();
+		preempt_enable();
 		atomic_set(&g_vmx_probe_failed, 1);
 		return;
 	}
@@ -269,13 +287,19 @@ static void hb_vmxon_on_cpu(void *info)
 		pr_err(PRLOG "cpu %u: VMPTRLD failed (%d)\n", cpu, ret);
 		hb_stop_vmx();
 		hb_disable_vmx();
-		pc->vmx_on = false;
+		local_irq_enable();
+		preempt_enable();
 		atomic_set(&g_vmx_probe_failed, 1);
 		return;
 	}
 
 	pr_info(PRLOG "cpu %u: guest VMCS clear/load ok vmcs va=%p pa=0x%llx\n",
 		cpu, pc->vmcs_region, vmcs_pa);
+
+	hb_stop_vmx();
+	hb_disable_vmx();
+	local_irq_enable();
+	preempt_enable();
 }
 
 static void hb_vmxoff_on_cpu(void *info)

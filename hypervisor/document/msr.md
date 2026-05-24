@@ -4,12 +4,14 @@
 
 **MSR** = **Model Specific Register** (모델별 레지스터)
 
-Intel x86 CPU 내부에 있는 **CPU 전용 설정·상태 레지스터**이다. 각 MSR은 **인덱스(주소)** 로 구분하며(예: `IA32_FEATURE_CONTROL` = `0x3A`), 64비트 값을 담는다.
+Intel x86 CPU 내부에 있는 **CPU 전용 설정·상태 레지스터**이다. 
+각 MSR은 **인덱스(주소)** 로 구분하며(예: `IA32_FEATURE_CONTROL` = `0x3A`), 64비트 값을 담는다.
 
 - **접근 명령:** `RDMSR`(읽기), `WRMSR`(쓰기)
 - **일반적인 호출 경로:** 커널/하이퍼바이저에서 `rdmsr` / `wrmsr` (또는 래퍼 `read_msr` / `hb_rdmsr` 등)
 
-MSR은 **BIOS 화면에 표시되는 항목이 아니다.** POST/UEFI 메뉴에 MSR 목록이 뜨지 않으며, CPU 하드웨어 상태로만 존재한다.
+MSR은 **BIOS 화면에 표시되는 항목이 아니다.** 
+POST/UEFI 메뉴에 MSR 목록이 뜨지 않으며, CPU 하드웨어 상태로만 존재한다.
 
 ---
 
@@ -21,7 +23,8 @@ MSR은 **BIOS 화면에 표시되는 항목이 아니다.** POST/UEFI 메뉴에 
 | **OS/커널** | 부팅 이후 | 정책 MSR **읽기**, 성능·전력·일부 기능 MSR 읽기/쓰기 |
 | **하이퍼바이저/VMM** | VMX 준비·동작 중 | `IA32_VMX_*` 등 VMX capability MSR, VMX 관련 설정 |
 
-**정리:** MSR 전체가 “BIOS 전용”은 아니다. 다만 **특정 MSR**(아래 `IA32_FEATURE_CONTROL`)은 BIOS가 부팅 시 값을 박아 두고 잠그는 **플랫폼 정책** 용도로 쓰인다.
+**정리:** MSR 전체가 “BIOS 전용”은 아니다. 
+다만 **특정 MSR**(아래 `IA32_FEATURE_CONTROL`)은 BIOS가 부팅 시 값을 박아 두고 잠그는 **플랫폼 정책** 용도로 쓰인다.
 
 ---
 

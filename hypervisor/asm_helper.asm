@@ -58,7 +58,7 @@ hb_set_cr4:
 hb_enable_vmx:
 	push rax
 	mov rax, cr4
-	bts rax, 13
+	bts rax, 13	; CR4.VMXE(비트 13): VMX 명령 허용 (VMXON 전 필수)
 	mov cr4, rax
 	pop rax
 	ret
@@ -72,15 +72,16 @@ hb_disable_vmx:
 	pop rax
 	ret
 
-; int hb_start_vmx(void *vmxon_region_pa)  -- RDI = &physical_address
+; int hb_start_vmx(void *vmxon_region_pa)
+; RDI = VMXON 영역 물리주소(PA)를 담은 변수의 주소
 hb_start_vmx:
-	vmxon [rdi]
-	jc .error
-	jz .error
-	xor rax, rax
+	vmxon [rdi]		; VMX root 모드 진입 (VMXON)
+	jc .error		; CF=1: VMXON 실패
+	jz .error		; ZF=1: VMXON 실패 (무효 동작)
+	xor rax, rax		; 성공 시 0 반환
 	ret
 .error:
-	mov rax, -1
+	mov rax, -1		; 실패 시 -1 반환
 	ret
 
 ; void hb_stop_vmx(void)
