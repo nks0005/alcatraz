@@ -15,5 +15,7 @@ int hb_start_vmx(void *vmxon_region_pa);
 void hb_stop_vmx(void);
 int hb_clear_vmcs(void *vmcs_region_pa);
 int hb_load_vmcs(void *vmcs_region_pa);
+int hb_write_vmcs(u64 field, u64 value);
+int hb_read_vmcs(u64 field, u64 *value);
 
 #endif /* ASM_HELPER_H */

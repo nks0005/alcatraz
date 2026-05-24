@@ -27,10 +27,15 @@
 #define HB_MSR_FEATURE_CTL	MSR_IA32_FEAT_CTL
 #endif
 
+/* VMCS field: link pointer (no shadow VMCS) — hyper_box VM_VMCS_LINK_PTR */
+#define VM_VMCS_LINK_PTR	0x2800ULL
+
 struct hb_percpu_vmx {
 	void *vmxon_region;
 	void *vmcs_region;
 	bool vmx_on;
+	u64 saved_cr0;
+	u64 saved_cr4;
 };
 
 static struct hb_percpu_vmx *g_vmx;
@@ -43,6 +48,7 @@ static u32 hb_vmx_revision_id(void);
 static void hb_adjust_vmx_cr0_cr4(void);
 static int hb_vmx_alloc_regions(void);
 static void hb_vmx_free_regions(void);
+static int hb_vmx_probe_vmwrite(unsigned int cpu);
 static void hb_vmxon_on_cpu(void *info);
 static void hb_vmxoff_on_cpu(void *info);
 static int hb_vmx_startup_all_cpus(void);
@@ -109,8 +115,8 @@ static int __init hypervisor_init(void)
 		return ret;
 	}
 
-	pr_info(PRLOG "all %u online cpus: VMXON/VMCLEAR/VMPTRLD probe ok "
-		"(VMXOFF before return)\n", num_online_cpus());
+	pr_info(PRLOG "all %u online cpus: VMXON/VMCLEAR/VMPTRLD/VMWRITE probe ok "
+		"(VMXOFF on module unload)\n", num_online_cpus());
 	return 0;
 }
 
@@ -247,6 +253,38 @@ static void hb_vmx_free_regions(void)
 	g_vmx = NULL;
 }
 
+/*
+ * Minimal VMWRITE probe: link pointer (no shadow VMCS) write + VMREAD verify.
+ * Must run after VMPTRLD on the same CPU with VMX still on.
+ */
+static int hb_vmx_probe_vmwrite(unsigned int cpu)
+{
+	const u64 link_none = 0xffffffffffffffffULL;
+	int ret;
+	u64 read_back = 0;
+
+	ret = hb_write_vmcs(VM_VMCS_LINK_PTR, link_none);
+	if (ret) {
+		pr_err(PRLOG "cpu %u: VMWRITE VMCS_LINK_PTR failed (%d)\n", cpu, ret);
+		return ret;
+	}
+
+	ret = hb_read_vmcs(VM_VMCS_LINK_PTR, &read_back);
+	if (ret) {
+		pr_err(PRLOG "cpu %u: VMREAD VMCS_LINK_PTR failed (%d)\n", cpu, ret);
+		return ret;
+	}
+
+	if (read_back != link_none) {
+		pr_err(PRLOG "cpu %u: VMCS_LINK_PTR mismatch (wrote %llx, read %llx)\n",
+			cpu, link_none, read_back);
+		return -EIO;
+	}
+
+	pr_info(PRLOG "cpu %u: VMWRITE/VMREAD VMCS_LINK_PTR ok\n", cpu);
+	return 0;
+}
+
 static void hb_vmxon_on_cpu(void *info)
 {
 	unsigned int cpu = smp_processor_id();
@@ -279,6 +317,8 @@ static void hb_vmxon_on_cpu(void *info)
 
 	saved_cr0 = hb_get_cr0();
 	saved_cr4 = hb_get_cr4();
+	pc->saved_cr0 = saved_cr0;
+	pc->saved_cr4 = saved_cr4;
 
 	hb_adjust_vmx_cr0_cr4();
 	hb_enable_vmx();
@@ -309,8 +349,15 @@ static void hb_vmxon_on_cpu(void *info)
 		goto out_vmxoff;
 	}
 
-	pr_info(PRLOG "cpu %u: VMXON/VMCLEAR/VMPTRLD ok (vmcs pa=0x%llx)\n",
-		cpu, (u64)vmcs_pa);
+	ret = hb_vmx_probe_vmwrite(cpu);
+	if (ret) {
+		atomic_set(&g_vmx_probe_failed, 1);
+		goto out_vmxoff;
+	}
+
+	pr_info(PRLOG "cpu %u: VMXON/VMCLEAR/VMPTRLD/VMWRITE ok (vmcs pa=0x%llx, "
+		"VMXOFF on rmmod)\n", cpu, (u64)vmcs_pa);
+	goto out_keep_vmx;
 
 out_vmxoff:
 	if (vmx_on) {
@@ -322,6 +369,12 @@ out_restore_cr:
 	hb_disable_vmx();
 	hb_set_cr4(saved_cr4);
 	hb_set_cr0(saved_cr0);
+	local_irq_enable();
+	preempt_enable();
+	return;
+
+out_keep_vmx:
+	/* VMXON 유지 — VMXOFF·CR 복구는 hb_vmxoff_on_cpu / module exit */
 	local_irq_enable();
 	preempt_enable();
 }
@@ -337,11 +390,19 @@ static void hb_vmxoff_on_cpu(void *info)
 	if (!pc->vmx_on)
 		return;
 
+	preempt_disable();
+	local_irq_disable();
+
 	hb_stop_vmx();
 	hb_disable_vmx();
+	hb_set_cr4(pc->saved_cr4);
+	hb_set_cr0(pc->saved_cr0);
 	pc->vmx_on = false;
 
-	pr_info(PRLOG "cpu %u: VMXOFF ok\n", cpu);
+	local_irq_enable();
+	preempt_enable();
+
+	pr_info(PRLOG "cpu %u: VMXOFF ok (CR restored)\n", cpu);
 }
 
 static int hb_vmx_startup_all_cpus(void)
@@ -383,4 +444,4 @@ module_exit(hypervisor_exit);
 
 MODULE_AUTHOR("nks004@naver.com");
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("Hypervisor probe: per-CPU VMXON/VMXOFF + VMCS regions");
+MODULE_DESCRIPTION("Hypervisor probe: VMXON/VMCLEAR/VMPTRLD/VMWRITE; VMXOFF on unload");

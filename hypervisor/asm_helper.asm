@@ -15,6 +15,8 @@ global hb_start_vmx
 global hb_stop_vmx
 global hb_clear_vmcs
 global hb_load_vmcs
+global hb_write_vmcs
+global hb_read_vmcs
 
 ; u64 hb_rdmsr(u32 msr_index)
 hb_rdmsr:
@@ -108,5 +110,27 @@ hb_load_vmcs:
 	xor rax, rax
 	ret
 .error:
+	mov rax, -1
+	ret
+
+; int hb_write_vmcs(u64 field, u64 value)
+hb_write_vmcs:
+	vmwrite rdi, rsi
+	jc .error_w
+	jz .error_w
+	xor rax, rax
+	ret
+.error_w:
+	mov rax, -1
+	ret
+
+; int hb_read_vmcs(u64 field, u64 *value)
+hb_read_vmcs:
+	vmread [rsi], rdi
+	jc .error_r
+	jz .error_r
+	xor rax, rax
+	ret
+.error_r:
 	mov rax, -1
 	ret
