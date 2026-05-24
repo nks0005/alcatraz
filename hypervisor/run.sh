@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Load hypervisor_b.ko and show kernel log
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+MODULE_NAME="hypervisor_b"
+KO="${MODULE_NAME}.ko"
+DMESG_TAG="hypervisor_b:"
+
+show_module_log() {
+	local label="$1"
+	echo "==> kernel log: $label"
+	if ! sudo dmesg | grep "$DMESG_TAG"; then
+		echo "(no lines matching $DMESG_TAG)"
+	fi
+}
+
+clear_kernel_log() {
+	if sudo dmesg -C >/dev/null 2>&1; then
+		return 0
+	fi
+	sudo dmesg -c >/dev/null 2>&1 || true
+}
+
+is_module_loaded() {
+	LC_ALL=C lsmod | awk '$1 == "'"$MODULE_NAME"'" { found=1 } END { exit !found }'
+}
+
+if is_module_loaded; then
+	echo "error: $MODULE_NAME is already loaded (run ./stop.sh first)" >&2
+	exit 1
+fi
+
+if [[ ! -f "$KO" ]]; then
+	echo "error: $KO not found (run ./build.sh first)" >&2
+	exit 1
+fi
+
+echo "==> clear kernel log buffer (only this run's messages)"
+clear_kernel_log
+
+echo "==> insmod $KO"
+if ! sudo insmod "$KO"; then
+	echo "error: insmod failed" >&2
+	show_module_log "after failed insmod"
+	exit 1
+fi
+
+show_module_log "after insmod"
+echo "==> done (module loaded; use ./stop.sh to unload)"
