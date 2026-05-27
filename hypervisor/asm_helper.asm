@@ -17,6 +17,17 @@ global hb_clear_vmcs
 global hb_load_vmcs
 global hb_write_vmcs
 global hb_read_vmcs
+global hb_get_cr3
+global hb_get_cs
+global hb_get_ss
+global hb_get_ds
+global hb_get_es
+global hb_get_fs
+global hb_get_gs
+global hb_get_ldtr
+global hb_get_tr
+global hb_get_dr7
+global hb_get_rflags
 
 ; u64 hb_rdmsr(u32 msr_index)
 hb_rdmsr:
@@ -133,4 +144,54 @@ hb_read_vmcs:
 	ret
 .error_r:
 	mov rax, -1
+	ret
+
+; u64 hb_get_cr3(void)
+hb_get_cr3:
+	mov rax, cr3
+	ret
+
+; u64 hb_get_cs/ss/ds/es/fs/gs(void)
+hb_get_cs:
+	mov rax, cs
+	ret
+
+hb_get_ss:
+	mov rax, ss
+	ret
+
+hb_get_ds:
+	mov rax, ds
+	ret
+
+hb_get_es:
+	mov rax, es
+	ret
+
+hb_get_fs:
+	mov rax, fs
+	ret
+
+hb_get_gs:
+	mov rax, gs
+	ret
+
+; u64 hb_get_ldtr(void) / hb_get_tr(void)
+hb_get_ldtr:
+	sldt rax
+	ret
+
+hb_get_tr:
+	str rax
+	ret
+
+; u64 hb_get_dr7(void)
+hb_get_dr7:
+	mov rax, dr7
+	ret
+
+; u64 hb_get_rflags(void)
+hb_get_rflags:
+	pushfq
+	pop rax
 	ret

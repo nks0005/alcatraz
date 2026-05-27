@@ -18,4 +18,16 @@ int hb_load_vmcs(void *vmcs_region_pa);
 int hb_write_vmcs(u64 field, u64 value);
 int hb_read_vmcs(u64 field, u64 *value);
 
+u64 hb_get_cr3(void);
+u64 hb_get_cs(void);
+u64 hb_get_ss(void);
+u64 hb_get_ds(void);
+u64 hb_get_es(void);
+u64 hb_get_fs(void);
+u64 hb_get_gs(void);
+u64 hb_get_ldtr(void);
+u64 hb_get_tr(void);
+u64 hb_get_dr7(void);
+u64 hb_get_rflags(void);
+
 #endif /* ASM_HELPER_H */
